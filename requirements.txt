@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+redis
+elasticsearch==7.17.9
+requests
+pydantic
+python-multipart
+jinja2
+aiofiles
+dspy-ai
+google-generativeai
+httpx
+pydantic-settings
+openai
