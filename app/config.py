@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     elasticsearch_url: str = "http://elasticsearch:9200"
     ollama_url: str = "http://ollama:11434"
     # gemini_api_key: str = "AIzaSyClTVTxyvOfo1AxlIkrXkMj7apIUvPRr78"
-    openai_api_key: str = ""
+    openai_api_key: str
     product_endpoint: str = "https://newscnbnc.webserver9.com/wp-json/mcp/v1/rpc"
     
     class Config:
