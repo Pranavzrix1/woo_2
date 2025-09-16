@@ -281,8 +281,8 @@ class ElasticsearchService:
                 out.append({
                     "id": src.get("id") or h.get("_id"),
                     "name": src.get("name") or src.get("title") or src.get("product_name"),
-                    "score": h.get("_score"),
-                    "raw": src
+                    # "score": h.get("_score"),
+                    # "raw": src
                 })
             return out
         except Exception:
