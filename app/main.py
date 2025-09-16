@@ -15,6 +15,9 @@ async def lifespan(app: FastAPI):
     print("Starting up...")
     es_service = ElasticsearchService()
     product_service = ProductService()
+    
+    # Store services for cleanup
+    app.state.product_service = product_service
 
     # Wait for Elasticsearch to be ready
     import aiohttp
@@ -23,18 +26,26 @@ async def lifespan(app: FastAPI):
     es_url = settings.elasticsearch_url
     max_wait = 60  # seconds
     start = time.time()
+    session = None
+    
     while True:
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{es_url}/_cluster/health") as resp:
-                    if resp.status == 200:
-                        break
-        except Exception:
-            pass
+            if not session:
+                session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+            async with session.get(f"{es_url}/_cluster/health") as resp:
+                if resp.status == 200:
+                    break
+        except Exception as e:
+            print(f"ES health check failed: {e}")
+        
         if time.time() - start > max_wait:
             print("Elasticsearch did not become ready in time.")
             break
         await asyncio.sleep(2)
+    
+    # Cleanup session
+    if session:
+        await session.close()
 
     await es_service.create_product_index()
     await es_service.create_category_index()  # ← ADD THIS
@@ -44,6 +55,11 @@ async def lifespan(app: FastAPI):
 
     yield
     print("Shutting down...")
+    # Cleanup HTTP clients
+    await product_service.close()
+    # Also cleanup embedding service if it exists
+    if hasattr(es_service, '_embedding_service'):
+        await es_service._embedding_service.close()
 # ...existing code...
 
 

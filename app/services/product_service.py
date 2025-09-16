@@ -7,71 +7,77 @@ from app.services.elasticsearch_service import ElasticsearchService
 class ProductService:
     def __init__(self):
         self.es_service = ElasticsearchService()
+        self._client = None
+    
+    async def get_client(self):
+        if not self._client:
+            self._client = httpx.AsyncClient(timeout=30.0)
+        return self._client
+    
+    async def close(self):
+        if self._client:
+            await self._client.aclose()
+            self._client = None
         
     async def fetch_products_from_endpoint(self) -> List[Dict[str, Any]]:
         """Fetch products from WordPress with proper data transformation"""
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    settings.product_endpoint,
-                    json={
-                        "jsonrpc": "2.0",
-                        "method": "get_products",
-                        "params": {},
-                        "id": 1
-                    },
-                    headers={"Content-Type": "application/json"}
-                )
+        try:
+            client = await self.get_client()
+            response = await client.post(
+                settings.product_endpoint,
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "get_products",
+                    "params": {},
+                    "id": 1
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                raw_products = data.get("result", [])
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    raw_products = data.get("result", [])
-                    
-                    # Transform WordPress data to our format
-                    products = []
-                    for item in raw_products:
-                        # Only include products with valid prices
-                        price_str = item.get("price", "")
-                        if not price_str or price_str == "":
-                            continue
-                            
-                        try:
-                            price = float(price_str)
-                        except (ValueError, TypeError):
-                            continue
-                            
-                        products.append({
-                            "id": item.get("id"),
-                            "name": item.get("name", "Unknown Product"),
-                            "description": item.get("description", ""),
-                            "price": price,
-                            "category": ", ".join(item.get("categories", ["Uncategorized"])),
-                            "sku": str(item.get("id", "")),
-
-
-                            "status": item.get("status", "publish"),
-                            "stock_status": item.get("stock_status", "instock"),
-                            "images": item.get("images", []),  # This is the image array!
-                            "image": item.get("images", [None])[0] if item.get("images") else None,  # First image URL
+                # Transform WordPress data to our format
+                products = []
+                for item in raw_products:
+                    # Only include products with valid prices
+                    price_str = item.get("price", "")
+                    if not price_str or price_str == "":
+                        continue
                         
-                            "url": item.get("permalink") or (
-                                f"https://newscnbnc.webserver9.com/product/{item.get('slug')}/" 
-                                if item.get("slug") 
-                                else f"https://newscnbnc.webserver9.com/product/{item.get('id')}/"
-                            ),
-                            "slug": item.get("slug", "")
+                    try:
+                        price = float(price_str)
+                    except (ValueError, TypeError):
+                        continue
                         
-                        })
-                    
-                    
-                    return products
-                else:
-                    print(f"Error fetching products: {response.status_code}")
-                    return []
-                    
-            except Exception as e:
-                print(f"Exception fetching products: {e}")
+                    products.append({
+                        "id": item.get("id"),
+                        "name": item.get("name", "Unknown Product"),
+                        "description": item.get("description", ""),
+                        "price": price,
+                        "category": ", ".join(item.get("categories", ["Uncategorized"])),
+                        "sku": str(item.get("id", "")),
+                        "status": item.get("status", "publish"),
+                        "stock_status": item.get("stock_status", "instock"),
+                        "images": item.get("images", []),
+                        "image": item.get("images", [None])[0] if item.get("images") else None,
+                        "url": item.get("permalink") or (
+                            f"https://newscnbnc.webserver9.com/product/{item.get('slug')}/" 
+                            if item.get("slug") 
+                            else f"https://newscnbnc.webserver9.com/product/{item.get('id')}/"
+                        ),
+                        "slug": item.get("slug", "")
+                    })
+                
+                return products
+            else:
+                print(f"Error fetching products: {response.status_code}")
                 return []
+                
+        except Exception as e:
+            print(f"Exception fetching products: {e}")
+            return []
     
     async def fetch_and_index_products(self):
         """Fetch products and index them in Elasticsearch"""
@@ -93,44 +99,41 @@ class ProductService:
         except Exception as e:
             print(f"Product search error: {e}")
             return []
-        
 
     async def get_product_categories(self) -> List[Dict[str, Any]]:
         """Fetch product categories from WooCommerce endpoint"""
-        async with httpx.AsyncClient() as client:
-            try:
-                # Call WooCommerce categories endpoint
-                response = await client.post(
-                    settings.product_endpoint,
-                    json={
-                        "jsonrpc": "2.0",  # ← ADD THIS
-                        "method": "get_product_categories",
-                        "params": {},
-                        "id": 1  # ← ADD THIS
-                    },
-                    headers={"Content-Type": "application/json"}  # ← ADD THIS
-                )
+        try:
+            client = await self.get_client()
+            response = await client.post(
+                settings.product_endpoint,
+                json={
+                    "jsonrpc": "2.0",
+                    "method": "get_product_categories",
+                    "params": {},
+                    "id": 1
+                },
+                headers={"Content-Type": "application/json"}
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                print(f"🔍 Category Response Debug: {data}")
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    print(f"🔍 Category Response Debug: {data}")  # ← ADD THIS DEBUG LINE
-                    
-                    # Try multiple response formats
-                    if data.get("success"):
-                        return data.get("data", [])
-                    elif data.get("result"):  # ← ADD THIS (same as products)
-                        return data.get("result", [])
-                    elif isinstance(data, list):  # ← ADD THIS (direct array)
-                        return data
-                    else:
-                        print(f"❌ Unexpected category response format: {data}")
-                
-                print(f"Categories fetch failed: {response.status_code}")
-                return []
-            except Exception as e:
-                print(f"Error fetching categories: {e}")
-                return []
-
+                # Try multiple response formats
+                if data.get("success"):
+                    return data.get("data", [])
+                elif data.get("result"):
+                    return data.get("result", [])
+                elif isinstance(data, list):
+                    return data
+                else:
+                    print(f"❌ Unexpected category response format: {data}")
+            
+            print(f"Categories fetch failed: {response.status_code}")
+            return []
+        except Exception as e:
+            print(f"Error fetching categories: {e}")
+            return []
 
     async def fetch_and_index_categories(self):
         """Fetch categories from WooCommerce and index in Elasticsearch"""
@@ -145,7 +148,6 @@ class ProductService:
     async def search_categories(self, query: str = "", limit: int = 50) -> List[Dict[str, Any]]:
         """Search categories using Elasticsearch"""
         return await self.es_service.search_categories(query, limit)
-    
 
     async def generate_short_text(self, prompt: str, max_tokens: int = 250) -> str:
         # wrapper around your project's LLM helper (dspy or other).
@@ -169,5 +171,3 @@ class ProductService:
             return hits[0]["_source"] if hits else None
         except Exception:
             return None
-
-
