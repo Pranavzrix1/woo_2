@@ -14,3 +14,4 @@ google-generativeai
 httpx
 pydantic-settings
 openai
+redis

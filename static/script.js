@@ -438,7 +438,6 @@
             transition: all 0.3s ease;
         }
         
-        /* ✅ NEW: Product Image Styles */
         .product img {
             transition: transform 0.3s ease;
             border-radius: 12px;
@@ -464,7 +463,6 @@
             color: #9ca3af;
         }
         
-        /* ✅ NEW: Clickable Product Styles */
         .clickable-product {
             cursor: pointer !important;
             transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1) !important;
@@ -597,7 +595,7 @@
         right: 20px;
         width: 420px;
         max-width: calc(100vw - 40px);
-        display: none;
+        display: flex;
         z-index: 10000;
     `;
 
@@ -676,7 +674,7 @@
     document.body.appendChild(chatButton);
 
     // Event handlers
-    let isPopupOpen = false;
+    let isPopupOpen = true; // Start with chatbot open
 
     chatButton.addEventListener('mouseenter', () => {
         if (!isPopupOpen) {
@@ -784,11 +782,16 @@
         messages.scrollTop = messages.scrollHeight;
     }
 
+    // Chat debouncing
+    let chatTimeout;
+    let isProcessing = false;
+    
     async function sendMessage() {
         const message = messageInput.value.trim();
-        if (!message) return;
+        if (!message || isProcessing) return;
 
-        // Disable input while processing
+        // Prevent rapid fire requests
+        isProcessing = true;
         messageInput.disabled = true;
         sendBtn.disabled = true;
 
@@ -809,8 +812,11 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
+<<<<<<< Updated upstream
 
 
+=======
+>>>>>>> Stashed changes
             const data = await response.json();
 
             // helper: escape text for safe innerHTML
@@ -919,6 +925,7 @@
             addMessage('Sorry, I encountered an error. Please try again.', false);
         } finally {
             // Re-enable input
+            isProcessing = false;
             messageInput.disabled = false;
             sendBtn.disabled = false;
             messageInput.focus();
@@ -936,9 +943,7 @@
     // Product search functionality
     const searchInput = document.getElementById('searchInput');
     const productsDiv = document.getElementById('products');
-    let searchTimeout;
 
-    // ✅ ENHANCED: Updated displayProducts function with clickable products
     function displayProducts(products) {
         if (!products.length) {
             productsDiv.innerHTML = '<div class="loading">No products found. Try a different search term.</div>';
@@ -956,7 +961,7 @@
                 `<span class="product-status-badge" style="background: #10b981; color: white; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: 500;">✅ In Stock</span>` :
                 `<span class="product-status-badge" style="background: #ef4444; color: white; padding: 4px 8px; border-radius: 8px; font-size: 10px; font-weight: 500;">❌ Out of Stock</span>`;
             
-            // ✅ NEW: Product URL handling
+            // Product URL handling
             const productUrl = product.url || `https://newscnbnc.webserver9.com/product/${product.slug || product.id}`;
             
             return `
@@ -973,7 +978,6 @@
                     </div>
                     <p style="font-size: 0.85rem; color: #6b7280; line-height: 1.4; margin-bottom: 12px;">${product.description || 'No description available'}</p>
                     
-                    <!-- ✅ NEW: Call-to-action button -->
                     <div style="text-align: center; padding-top: 8px; border-top: 1px solid #f3f4f6;">
                         <span class="product-cta-button">
                             🛒 View Product
@@ -986,13 +990,13 @@
         productsDiv.innerHTML = productsHtml;
     }
 
-    // ✅ NEW: Function to handle product clicks
+    // Function to handle product clicks
     function openProduct(url) {
         // Open in new tab to keep your chat widget accessible
         window.open(url, '_blank', 'noopener,noreferrer');
     }
 
-    // ✅ ADD THIS LINE - Make function globally accessible
+    // Make function globally accessible
     window.openProduct = openProduct;
 
     async function loadProducts(query = '') {
@@ -1001,7 +1005,7 @@
             
             const url = query 
                 ? `/api/products/search?q=${encodeURIComponent(query)}&limit=20`
-                : `/api/products/search?q=&limit=20`;
+                : `/api/products/search?q=all&limit=20`;
                 
             const response = await fetch(url);
             
@@ -1018,12 +1022,30 @@
         }
     }
 
-    // Search input handler
+    // Search input handler with improved debouncing
+    let searchTimeout;
+    let lastSearchValue = '';
+    
     searchInput.addEventListener('input', (e) => {
+        const currentValue = e.target.value.trim();
+        
+        // Skip if same value
+        if (currentValue === lastSearchValue) return;
+        
         clearTimeout(searchTimeout);
+        
+        // Immediate search for empty query (show all)
+        if (currentValue === '') {
+            lastSearchValue = currentValue;
+            loadProducts('all');
+            return;
+        }
+        
+        // Debounced search for other queries
         searchTimeout = setTimeout(() => {
-            loadProducts(e.target.value.trim());
-        }, 300);
+            lastSearchValue = currentValue;
+            loadProducts(currentValue);
+        }, 500);
     });
 
     // Add welcome message
@@ -1033,4 +1055,8 @@
         }
     }, 500);
 
+<<<<<<< Updated upstream
 })();
+=======
+})();
+>>>>>>> Stashed changes
