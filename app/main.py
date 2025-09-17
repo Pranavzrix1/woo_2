@@ -14,12 +14,14 @@ from app.services.elasticsearch_service import ElasticsearchService
 async def lifespan(app: FastAPI):
     print("Starting up...")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     es_service = ElasticsearchService()
     product_service = ProductService()
 =======
+=======
+>>>>>>> Stashed changes
     es_service = get_elasticsearch_service()
     product_service = get_product_service()
->>>>>>> Stashed changes
 
     # Wait for Elasticsearch to be ready
     import aiohttp
@@ -31,6 +33,7 @@ async def lifespan(app: FastAPI):
     while True:
         try:
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{es_url}/_cluster/health") as resp:
                     if resp.status == 200:
@@ -38,6 +41,8 @@ async def lifespan(app: FastAPI):
         except Exception:
             pass
 =======
+=======
+>>>>>>> Stashed changes
             if not session:
                 timeout = aiohttp.ClientTimeout(total=10)
                 session = aiohttp.ClientSession(timeout=timeout)
@@ -62,10 +67,12 @@ async def lifespan(app: FastAPI):
     yield
     print("Shutting down...")
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 =======
+=======
+>>>>>>> Stashed changes
     # Cleanup all services
     await cleanup_services()
->>>>>>> Stashed changes
 # ...existing code...
 
 
