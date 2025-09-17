@@ -13,8 +13,13 @@ from app.services.elasticsearch_service import ElasticsearchService
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting up...")
+<<<<<<< Updated upstream
     es_service = ElasticsearchService()
     product_service = ProductService()
+=======
+    es_service = get_elasticsearch_service()
+    product_service = get_product_service()
+>>>>>>> Stashed changes
 
     # Wait for Elasticsearch to be ready
     import aiohttp
@@ -25,12 +30,24 @@ async def lifespan(app: FastAPI):
     start = time.time()
     while True:
         try:
+<<<<<<< Updated upstream
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{es_url}/_cluster/health") as resp:
                     if resp.status == 200:
                         break
         except Exception:
             pass
+=======
+            if not session:
+                timeout = aiohttp.ClientTimeout(total=10)
+                session = aiohttp.ClientSession(timeout=timeout)
+            async with session.get(f"{es_url}/_cluster/health") as resp:
+                if resp.status == 200:
+                    break
+        except Exception as e:
+            print(f"ES health check failed: {e}")
+        
+>>>>>>> Stashed changes
         if time.time() - start > max_wait:
             print("Elasticsearch did not become ready in time.")
             break
@@ -44,6 +61,11 @@ async def lifespan(app: FastAPI):
 
     yield
     print("Shutting down...")
+<<<<<<< Updated upstream
+=======
+    # Cleanup all services
+    await cleanup_services()
+>>>>>>> Stashed changes
 # ...existing code...
 
 
