@@ -15,7 +15,8 @@ class CategoryFinderAgent:
     async def process(self, user_query: str) -> str:
         # Check for "all categories" intent
         show_all_keywords = ["all categories", "show all categories", "list all categories", 
-                           "what categories", "categories do you have", "product categories"]
+                           "what categories", "categories do you have", "product categories",
+                           "show all category", "all category"]
         is_show_all = any(keyword in user_query.lower() for keyword in show_all_keywords)
         
         if is_show_all:

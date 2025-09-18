@@ -8,7 +8,7 @@ class EmbeddingService:
     
     async def get_embedding(self, text: str) -> List[float]:
         """Get embedding from Ollama"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     f"{self.ollama_url}/api/embeddings",

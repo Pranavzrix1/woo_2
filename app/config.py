@@ -8,10 +8,14 @@ class Settings(BaseSettings):
     # gemini_api_key: str = "AIzaSyClTVTxyvOfo1AxlIkrXkMj7apIUvPRr78"
     openai_api_key: str
     product_endpoint: str = "https://newscnbnc.webserver9.com/wp-json/mcp/v1/rpc"
+
+    coupon_index: str = "coupons"
+    coupon_sync_on_start: bool = True
     
     class Config:
         env_file = ".env"
         extra = "allow"
+        arbitrary_types_allowed = True
 
 settings = Settings()
 

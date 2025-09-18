@@ -14,3 +14,6 @@ google-generativeai
 httpx
 pydantic-settings
 openai
+
+pytest-asyncio
+pytest

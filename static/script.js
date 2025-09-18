@@ -811,6 +811,7 @@
 
             // ---------- NEW: improved handling of API response ----------
             const data = await response.json();
+            console.log('API Response:', data); // DEBUG
 
             // small html-escape helper
             function escapeHtml(str) {
@@ -821,6 +822,42 @@
                     .replace(/>/g, "&gt;")
                     .replace(/"/g, "&quot;")
                     .replace(/'/g, "&#039;");
+            }
+
+            // Helper to extract recommendations from nested response
+            function extractRecommendations(response) {
+                if (Array.isArray(response?.recommendations)) {
+                    return response.recommendations;
+                }
+                // Handle multilingual agent response structure
+                if (typeof response === 'object' && response.response) {
+                    if (Array.isArray(response.response.recommendations)) {
+                        return response.response.recommendations;
+                    }
+                    // Try parsing if it's a stringified object
+                    if (typeof response.response === 'string') {
+                        try {
+                            const parsed = JSON.parse(response.response);
+                            if (Array.isArray(parsed.recommendations)) {
+                                return parsed.recommendations;
+                            }
+                        } catch (e) {}
+                    }
+                }
+                return null;
+            }
+
+            // Helper to extract pitch from nested response
+            function extractPitch(response) {
+                if (response?.pitch) return response.pitch;
+                if (response?.response?.pitch) return response.response.pitch;
+                if (typeof response?.response === 'string') {
+                    try {
+                        const parsed = JSON.parse(response.response);
+                        if (parsed.pitch) return parsed.pitch;
+                    } catch (e) {}
+                }
+                return null;
             }
 
             // build botResponse: product_finder (existing) OR sales_executive rich cards
@@ -841,38 +878,52 @@
                             </div>`;
                 }).join('');
                 botResponse = `<div>${html}</div>`;
-            } else if (data.response && Array.isArray(data.response.recommendations) && data.response.recommendations.length) {
-                // New: render recommendations as rich product cards inside the chat bubble
-                const pitchHtml = data.response.pitch ? `<div style="margin-bottom:8px;font-weight:600">${escapeHtml(data.response.pitch)}</div>` : '';
-                const recsHtml = data.response.recommendations.slice(0, 5).map(r => {
-                    const title = escapeHtml(r.title || '');
-                    const idPart = r.id ? ` <span style="opacity:0.7">(#${escapeHtml(String(r.id))})</span>` : '';
-                    const reason = r.reason ? `<div style="font-size:0.8rem;color:#9ca3af;margin-top:6px">${escapeHtml(r.reason)}</div>` : '';
-                    const imageHtml = r.image ? `<img src="${escapeHtml(r.image)}" alt="${title}" style="width:100px;height:80px;object-fit:cover;border-radius:8px;margin-right:12px;">` : `<div class="product-image-placeholder" style="width:100px;height:80px;border-radius:8px;margin-right:12px;display:flex;align-items:center;justify-content:center;background:#f3f4f6">📷</div>`;
-                    const priceHtml = r.price ? `<div style="font-weight:600;color:#059669;margin-top:6px">$${escapeHtml(String(r.price))}</div>` : '';
-                    const url = r.url || (r.id ? `/product/${escapeHtml(String(r.id))}` : '#');
-                    const desc = r.description ? `<div style="font-size:0.85rem;color:#6b7280;margin-top:6px">${escapeHtml(r.description)}</div>` : '';
-
-                    return `<div class="chat-product" style="display:flex;gap:12px;align-items:flex-start;padding:10px 8px;border-radius:10px;border:1px solid #f3f4f6;margin-bottom:10px;">
-                                <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;">${imageHtml}</a>
-                                <div style="flex:1;">
-                                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#111827;text-decoration:none">${title}${idPart}</a>
-                                    ${priceHtml}
-                                    ${desc}
-                                    ${reason}
-                                </div>
-                            </div>`;
-                }).join('');
-
-                botResponse = `<div>${pitchHtml}${recsHtml}</div>`;
             } else {
-                // fallback: show pitch or raw response text
-                if (data.response && typeof data.response === 'object' && data.response.pitch) {
-                    botResponse = escapeHtml(data.response.pitch);
-                } else if (typeof data.response === 'string') {
-                    botResponse = escapeHtml(data.response);
+                // Check for recommendations in any response structure
+                const recommendations = extractRecommendations(data);
+                const pitch = extractPitch(data);
+                
+                if (recommendations && recommendations.length > 0) {
+                    // Render recommendations as rich product cards
+                    const pitchHtml = pitch ? `<div style="margin-bottom:8px;font-weight:600">${escapeHtml(pitch)}</div>` : '';
+                    const recsHtml = recommendations.slice(0, 5).map(r => {
+                        const title = escapeHtml(r.name || r.title || 'Product');
+                        const idPart = r.id ? ` <span style="opacity:0.7">(#${escapeHtml(String(r.id))})</span>` : '';
+                        const reason = r.reason ? `<div style="font-size:0.8rem;color:#9ca3af;margin-top:6px">${escapeHtml(r.reason)}</div>` : '';
+                        const imageHtml = r.image ? `<img src="${escapeHtml(r.image)}" alt="${title}" style="width:100px;height:80px;object-fit:cover;border-radius:8px;margin-right:12px;">` : `<div class="product-image-placeholder" style="width:100px;height:80px;border-radius:8px;margin-right:12px;display:flex;align-items:center;justify-content:center;background:#f3f4f6">📷</div>`;
+                        const priceHtml = r.price ? `<div style="font-weight:600;color:#059669;margin-top:6px">$${escapeHtml(String(r.price))}</div>` : '';
+                        const categoryHtml = r.category ? `<div style="font-size:0.75rem;color:#6b7280;margin-top:4px">📂 ${escapeHtml(r.category)}</div>` : '';
+                        const statusHtml = r.stock_status ? `<div style="font-size:0.75rem;margin-top:4px;color:${r.stock_status === 'instock' || r.stock_status === 'en stock' ? '#059669' : '#dc2626'}">${r.stock_status === 'instock' || r.stock_status === 'en stock' ? '✅ In Stock' : '❌ Out of Stock'}</div>` : '';
+                        const url = r.url || (r.id ? `/product/${escapeHtml(String(r.id))}` : '#');
+                        const desc = r.description ? `<div style="font-size:0.85rem;color:#6b7280;margin-top:6px">${escapeHtml(r.description)}</div>` : '';
+
+                        return `<div class="chat-product" style="display:flex;gap:12px;align-items:flex-start;padding:10px 8px;border-radius:10px;border:1px solid #f3f4f6;margin-bottom:10px;">
+                                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="display:inline-block;">${imageHtml}</a>
+                                    <div style="flex:1;">
+                                        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" style="font-weight:600;color:#111827;text-decoration:none;font-size:0.95rem;">${title}${idPart}</a>
+                                        ${priceHtml}
+                                        ${categoryHtml}
+                                        ${statusHtml}
+                                        ${desc}
+                                        ${reason}
+                                    </div>
+                                </div>`;
+                    }).join('');
+
+                    botResponse = `<div>${pitchHtml}${recsHtml}</div>`;
                 } else {
-                    botResponse = escapeHtml(JSON.stringify(data.response || {}));
+                    // fallback: show pitch or raw response text
+                    if (pitch) {
+                        botResponse = escapeHtml(pitch);
+                    } else if (typeof data.response === 'string') {
+                        botResponse = escapeHtml(data.response);
+                    } else if (data.response && typeof data.response === 'object') {
+                        // Try to extract meaningful text from object
+                        const responseText = data.response.pitch || data.response.text || JSON.stringify(data.response);
+                        botResponse = escapeHtml(responseText);
+                    } else {
+                        botResponse = escapeHtml(JSON.stringify(data.response || {}));
+                    }
                 }
             }
 

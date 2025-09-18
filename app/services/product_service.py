@@ -5,12 +5,24 @@ from app.config import settings
 from app.services.elasticsearch_service import ElasticsearchService
 
 class ProductService:
-    def __init__(self):
-        self.es_service = ElasticsearchService()
+    def __init__(self, es_service=None):
+        # Use shared ES service or create new one
+        self.es = es_service or ElasticsearchService()
+        self.es_service = self.es
+    
+    async def close(self):
+        """Close ES client"""
+        try:
+            if hasattr(self, 'es') and self.es:
+                await self.es.close()
+        except Exception as e:
+            print(f"ProductService.close error: {e}")
+
+
         
     async def fetch_products_from_endpoint(self) -> List[Dict[str, Any]]:
         """Fetch products from WordPress with proper data transformation"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 response = await client.post(
                     settings.product_endpoint,
@@ -82,14 +94,42 @@ class ProductService:
             print(f"Found {len(products)} products with valid prices")
             print(f"Indexing {len(products)} products...")
             await self.es_service.index_products(products)
+            
+            # Invalidate search cache when products are updated
+            try:
+                from app.services.service_manager import service_manager
+                redis_service = service_manager.get_redis_service()
+                await redis_service.invalidate_search_cache()
+                print("Search cache invalidated")
+            except Exception:
+                pass
+            
             print("Products indexed successfully!")
         else:
             print("No products found to index")
     
-    async def search_products(self, query: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """Search products using Elasticsearch with error handling"""
+    async def search_products(self, query: str, limit: int = 10, use_cache: bool = True) -> List[Dict[str, Any]]:
+        """Search products with Redis caching"""
         try:
-            return await self.es_service.search_products(query, limit)
+            # Try cache first if enabled
+            if use_cache:
+                from app.services.service_manager import service_manager
+                redis_service = service_manager.get_redis_service()
+                cached_results = await redis_service.get_cached_search(query, limit)
+                if cached_results:
+                    return cached_results
+            
+            # Fallback to Elasticsearch
+            results = await self.es_service.search_products(query, limit)
+            
+            # Cache results if caching enabled
+            if use_cache and results:
+                try:
+                    await redis_service.cache_search(query, results, limit)
+                except Exception:
+                    pass  # Don't fail if caching fails
+            
+            return results
         except Exception as e:
             print(f"Product search error: {e}")
             return []
@@ -97,7 +137,7 @@ class ProductService:
 
     async def get_product_categories(self) -> List[Dict[str, Any]]:
         """Fetch product categories from WooCommerce endpoint"""
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=30.0) as client:
             try:
                 # Call WooCommerce categories endpoint
                 response = await client.post(
